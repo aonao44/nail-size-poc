@@ -1,191 +1,87 @@
-# ネイルチップサイズ測定ツール PoC版
+# Nail Size PoC
 
-## 📱 プロジェクト概要
+> スマートフォンで爪と 500 円玉を一緒に撮影するだけで、AI が実寸を推定し最適なネイルチップサイズを提案する PoC
 
-スマートフォンのカメラで爪を撮影し、500円玉を基準スケールとして爪の寸法を推定し、適切なネイルチップサイズを提案するWebツールのPoC版です。
+UI プロトタイプの呼称は **Tsumelier**。
 
-**対象形状:** ショートオーバル（1種類）
+## 何を解決するか
 
-**⚠️ 注意:** PoC段階のため、測定精度は保証されません。
+ネイルチップを EC で買うとき、自分の爪のサイズが分からず「届いたら合わなかった」という失敗が起きやすい。本 PoC は、誰の財布にも入っている **500 円玉（直径 26.5mm）** を物差し代わりに使い、スマホで撮るだけで爪の実寸とおすすめサイズを返す。専用ツールも採寸スキルも要らない。
 
-## 🛠 技術スタック
+## 動作フロー
 
-- **フレームワーク:** Next.js 16 (App Router) + TypeScript
-- **スタイリング:** Tailwind CSS v4
-- **AI:** Gemini 2.5 Flash ([@google/generative-ai](https://www.npmjs.com/package/@google/generative-ai) v0.24.1)
-- **デプロイ:** Vercel
-- **ランタイム:** Node.js
+1. スマホのブラウザで爪と 500 円玉を一緒に上から撮影
+2. Gemini Vision が 500 円玉を基準に爪の幅・長さ（mm）を推定
+3. 推定値からショートオーバル 10 段階の中で最適なネイルチップサイズを提案
 
-## 📥 セットアップ
+## 主要機能
 
-### 1. 依存関係のインストール
+- スマホブラウザ向けのカメラキャプチャ UI（背面カメラ優先・ガイド枠付き）
+- 撮影画像の自動リサイズ（長辺 1024px / JPEG 圧縮）で API ペイロードを軽量化
+- Gemini 2.5 Flash による画像 1 枚からの寸法推定（500 円玉を基準にピクセル↔mm 換算）
+- 幅を主・長さを副とした加重距離マッチングで 10 段階サイズから最適を提示
+- 信頼度（0〜1）と注意事項を結果カードに表示
+- 過負荷（503）・タイムアウト時の指数バックオフリトライ／再試行 UI
+- `USE_MOCK=true` でモック応答に切替可能（API キー不要のデモ）
+
+## 技術スタック
+
+- Next.js 16（App Router）／ React 19 ／ TypeScript
+- Tailwind CSS v4 ／ Noto Sans JP・Noto Serif JP（`next/font`）
+- Google Generative AI SDK（Gemini 2.5 Flash, Vision）
+- Cloudflare Workers ＋ OpenNext（エッジデプロイ対応）／ Vercel でも動作
+- Node.js ランタイム API Route（`maxDuration: 60s`）
+
+## アーキテクチャ
+
+- `app/page.tsx` — ランディング（ブランド説明・3 ステップ案内・撮影開始）
+- `app/capture/page.tsx` — 撮影画面（カメラ起動／プレビュー／撮り直し）
+- `app/result/page.tsx` — 解析結果（mm 表示・サイズチャートのハイライト・再試行）
+- `app/api/estimate/route.ts` — Gemini 呼び出し用 API Route。リトライ・タイムアウト・JSON 検証込み
+- `components/` — `CameraCapture` `GuideFrame` `LoadingOverlay` `ErrorView`
+- `lib/` — Gemini プロンプト（`geminiPrompt.ts`）／サイズマッチング（`matchSize.ts`）／画像リサイズ（`resizeImage.ts`）／サイズ表（`sizeData.ts`）／モック応答
+
+## セットアップ
 
 ```bash
+git clone https://github.com/aonao44/nail-size-poc.git
+cd nail-size-poc
 npm install
-```
-
-### 2. 環境変数の設定
-
-```bash
-cp .env.local.example .env.local
-```
-
-`.env.local` を編集して以下を設定します：
-
-```env
-GEMINI_API_KEY=your_api_key_here
-USE_MOCK=false
-```
-
-**Gemini API キーの取得方法:**
-1. [Google AI Studio](https://aistudio.google.com/apikey) にアクセス
-2. 「API キーを作成」をクリック
-3. 生成されたキーを `.env.local` に貼り付け
-
-## 🚀 開発サーバ起動
-
-```bash
+cp .env.local.example .env.local   # GEMINI_API_KEY を設定
 npm run dev
 ```
 
-ブラウザで `http://localhost:3000` を開きます。
+Gemini API キーは [Google AI Studio](https://aistudio.google.com/apikey) で発行できる。スマホ実機で動かす場合は HTTPS が必須（カメラ API の制約）なので、ngrok や Vercel プレビュー、Cloudflare のプレビュー URL を利用する。
 
-### スマートフォンでの動作確認
+### 環境変数
 
-スマートフォン実機でテストする場合：
+| 変数名 | 必須 | 説明 |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | ✅ | Gemini API キー |
+| `USE_MOCK` | - | `true` でモック応答（デモ・API キー不要） |
+| `GEMINI_MODEL` | - | 既定 `gemini-2.5-flash` |
 
-- **同一LAN接続:** PCのIPアドレスでアクセス（例：`http://192.168.1.100:3000`）
-- **HTTPS必須:** カメラ使用には HTTPS が必須のため、以下を推奨します
-  - [ngrok](https://ngrok.com/) でローカルサーバをHTTPS公開
-  - Vercel プレビューデプロイ（自動HTTPS対応）
+## デプロイ
 
-## ⚙️ 環境変数一覧
+- Cloudflare Workers（OpenNext 経由）
 
-| 変数名 | 必須 | 説明 | デフォルト |
-|---|---|---|---|
-| `GEMINI_API_KEY` | ✅ | Gemini API のキー | - |
-| `USE_MOCK` | - | `true` でモック応答を返す（開発・デモ用） | `false` |
+  ```bash
+  npm run preview   # ローカルで Workers ランタイムで起動
+  npm run deploy    # `opennextjs-cloudflare deploy`
+  ```
 
-## 🌐 Vercel へのデプロイ
+- Vercel — GitHub 連携でそのままデプロイ可。環境変数に `GEMINI_API_KEY` を登録するだけ。
 
-### デプロイ手順
+## 想定ユースケース
 
-1. **GitHub リポジトリと連携**
-   - Vercel にログイン
-   - 該当の GitHub リポジトリを選択
+- ネイル EC のサイズ選びアシスタント（購入前のサイズ診断ウィジェット）
+- ネイルサロンの事前カウンセリング（来店前の自宅採寸）
+- AR / Try-On 機能の前段（ユーザーごとの実寸データ取得）
 
-2. **環境変数設定**
-   - プロジェクト設定で以下を追加：
-     - `GEMINI_API_KEY`: 取得したAPIキー
-     - `USE_MOCK`: 本番で不要（省略可、デフォルト`false`）
+## ライセンス
 
-3. **デプロイ**
-   - リポジトリへのプッシュで自動デプロイ
-   - または Vercel Dashboard から手動デプロイ
+MIT
 
-4. **動作確認**
-   - 発行された URL にアクセス
-   - スマートフォンで動作確認
+## 作者
 
-## ✅ 動作確認チェックリスト
-
-実装・デプロイ後、以下の項目で動作確認してください：
-
-- [ ] トップ画面が表示される
-- [ ] 「はじめる」ボタンで撮影画面に遷移する
-- [ ] カメラ権限のリクエストが表示される
-- [ ] **撮影ステップ（真上から1枚）**
-  - [ ] カメラで撮影できる
-  - [ ] 撮り直しボタンで再撮影できる
-  - [ ] 「解析する」ボタンで結果画面に遷移する
-- [ ] **解析中**
-  - [ ] ローディング画面が表示される
-- [ ] **結果画面**
-  - [ ] 推定値（幅・長さ mm）が表示される
-  - [ ] 推奨サイズが表示される
-  - [ ] サイズ表のハイライトが正しい
-  - [ ] 「もう一度測る」ボタンでトップに戻る
-- [ ] **デバイス互換性**
-  - [ ] iOS Safari で動作する
-  - [ ] Android Chrome で動作する
-- [ ] **エラーハンドリング**
-  - [ ] Gemini API エラー時の挙動が適切
-
-## 📁 ディレクトリ構成
-
-```
-.
-├── app/                      # Next.js App Router
-│   ├── page.tsx             # トップ画面
-│   ├── capture/page.tsx     # 撮影画面
-│   ├── result/page.tsx      # 結果画面
-│   ├── api/estimate/route.ts # Gemini API エンドポイント
-│   ├── layout.tsx           # ルートレイアウト
-│   ├── globals.css          # グローバルスタイル
-│   └── favicon.ico
-├── components/              # UIコンポーネント
-│   ├── CameraCapture.tsx    # カメラキャプチャ
-│   ├── GuideFrame.tsx       # 撮影ガイド枠
-│   ├── LoadingOverlay.tsx   # ローディング表示
-│   └── ErrorView.tsx        # エラー表示
-├── lib/                      # ビジネスロジック
-│   ├── geminiPrompt.ts      # Gemini プロンプト定義
-│   ├── matchSize.ts         # サイズマッチング処理
-│   ├── mockResponse.ts      # モック応答
-│   ├── resizeImage.ts       # 画像リサイズ処理
-│   └── sizeData.ts          # サイズデータ定義
-├── types/                    # TypeScript 型定義
-│   └── index.ts
-├── docs/                     # ドキュメント
-│   ├── 要件定義書.md
-│   └── 質問事項.md
-├── public/                   # 静的ファイル
-├── .env.local.example       # 環境変数テンプレート
-├── next.config.ts           # Next.js 設定
-├── tailwind.config.ts       # Tailwind CSS 設定
-├── tsconfig.json            # TypeScript 設定
-├── package.json
-└── README.md
-```
-
-## 🔄 開発ワークフロー
-
-### ビルド
-
-```bash
-npm run build
-```
-
-### 本番環境で起動
-
-```bash
-npm run start
-```
-
-### Lint チェック
-
-```bash
-npm run lint
-```
-
-## 🚧 PoC 範囲外（将来対応予定）
-
-以下は将来のバージョンで対応予定です：
-
-- 他の爪形状対応（ベリーショート、ショートバレリーナ、ショートアーモンド、オーバル、ショートスクエア等）
-- AI 測定精度の向上・プロンプト最適化
-- 複数の 500 円玉検出
-- ECサイト（ネイルチップ販売店）との連携
-- 撮影履歴の保存機能
-- ユーザー認証・マイページ
-- より詳細なエラーハンドリング
-- アクセス解析・利用ログ
-- 多言語対応
-
-## 📝 ライセンス
-
-未設定
-
-## 👤 作成者
-
-Coconala PoC チーム
+[aonao44](https://github.com/aonao44)
