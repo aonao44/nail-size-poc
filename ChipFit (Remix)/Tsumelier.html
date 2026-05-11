@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tsumelier — ネイルチップ サイズ測定</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --tz-ink: #2A2326; --tz-bg: #FBF8F6; --tz-rose: oklch(72% 0.07 18); }
+  html, body { margin: 0; padding: 0; background: #E8DFD9; min-height: 100vh; }
+  body {
+    font-family: 'Noto Sans JP', -apple-system, 'Hiragino Sans', sans-serif;
+    color: #2A2326;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'palt' 1;
+  }
+  button { font-family: inherit; }
+  body {
+    background:
+      radial-gradient(80% 60% at 20% 0%, oklch(96% 0.015 20) 0%, transparent 50%),
+      radial-gradient(70% 50% at 100% 100%, oklch(95% 0.02 30) 0%, transparent 55%),
+      #EDE5E1;
+    min-height: 100vh;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 32px 0;
+    box-sizing: border-box;
+  }
+  #root { width: 100%; }
+  .stage-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 28px;
+  }
+  .screen-nav {
+    display: flex; gap: 6px; padding: 6px;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 99px;
+    border: 1px solid rgba(42,35,38,0.08);
+    box-shadow: 0 10px 30px -18px rgba(42,35,38,0.3);
+  }
+  .screen-nav button {
+    border: 0; background: transparent; cursor: pointer;
+    padding: 8px 14px; border-radius: 99px;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: #6B5F63; font-weight: 500;
+    transition: all 150ms;
+    white-space: nowrap;
+  }
+  .screen-nav button.active {
+    background: #2A2326; color: #fff;
+  }
+  .screen-nav button:hover:not(.active) {
+    color: #2A2326; background: rgba(42,35,38,0.04);
+  }
+  .brand-caption {
+    text-align: center;
+    font-size: 11px; letter-spacing: 0.3em; color: rgba(42,35,38,0.4);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="screens.jsx"></script>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const SCREENS = [
+      { id: 'top',      label: 'Top' },
+      { id: 'capture',  label: 'Capture' },
+      { id: 'analyze',  label: 'Analyzing' },
+      { id: 'result',   label: 'Result' },
+    ];
+
+    function App() {
+      const [screen, setScreen] = useState('top');
+
+      let content;
+      switch (screen) {
+        case 'top':
+          content = <TopScreen onStart={() => setScreen('capture')} />;
+          break;
+        case 'capture':
+          content = <CaptureScreen
+            onBack={() => setScreen('top')}
+            onNext={() => setScreen('analyze')}
+          />;
+          break;
+        case 'analyze':
+          content = <AnalyzingScreen onDone={() => setScreen('result')} />;
+          break;
+        case 'result':
+          content = <ResultScreen
+            onRetry={() => setScreen('top')}
+            onShop={() => {}}
+          />;
+          break;
+      }
+
+      const isDark = screen === 'capture';
+
+      return (
+        <div className="stage-wrap" data-screen-label={screen}>
+          <div className="brand-caption">Tsumelier · PoC Prototype</div>
+
+          <IOSDevice width={390} height={844} dark={isDark}>
+            <div style={{
+              width: '100%', height: '100%',
+              background: isDark ? '#0F0B0C' : '#FBF8F6',
+              paddingTop: 62,
+              boxSizing: 'border-box',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              {content}
+            </div>
+          </IOSDevice>
+
+          <div className="screen-nav">
+            {SCREENS.map(s => (
+              <button key={s.id}
+                className={screen === s.id ? 'active' : ''}
+                onClick={() => setScreen(s.id)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
